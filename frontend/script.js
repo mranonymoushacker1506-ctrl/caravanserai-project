@@ -1,4 +1,4 @@
-// script.js - Phase 4
+// script.js - FINAL LIVE VERSION
 
 import * as THREE from 'three';
 
@@ -18,28 +18,51 @@ const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
 const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
 
-// --- NEW: Communication with the AI Backend ---
+// --- State for Conversation History ---
+// This variable will store the chat history to give the AI "memory".
+let conversationHistory = "";
+
+// --- Communication with the LIVE AI Backend ---
 async function askAI(message) {
     try {
-        const response = await fetch('http://localhost:5000/ask', {
+        // This is your live backend URL.
+        const API_URL = "https://huggingface.co/spaces/BlueWolfCaravan/caravanserai-backend/run/predict";
+
+        // Show a loading indicator
+        document.body.style.cursor = 'wait';
+
+        const response = await fetch(API_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ message: message })
+            headers: { 'Content-Type': 'application/json' },
+            // Gradio API expects data in a specific format
+            body: JSON.stringify({
+                data: [
+                    message,
+                    conversationHistory // Send the current history
+                ]
+            })
         });
         const data = await response.json();
-        console.log("AI Response:", data.response);
-        // We will display this response on the screen later. For now, we log it.
-        alert("Tariq says: " + data.response);
+        
+        // Remove the loading indicator
+        document.body.style.cursor = 'default';
+        
+        // Gradio returns data in a list; the response is the first item
+        const tariqResponse = data.data[0]; 
+        // The updated history is the second item
+        conversationHistory = data.data[1]; 
+
+        console.log("AI Response:", tariqResponse);
+        alert("Tariq says: " + tariqResponse);
 
     } catch (error) {
+        document.body.style.cursor = 'default';
         console.error("Error communicating with AI:", error);
-        alert("Could not connect to the AI's mind. Is the backend server running?");
+        alert("Could not connect to the AI's mind. Please check the URL and backend status.");
     }
 }
 
-// --- NEW: Making the Cube Clickable ---
+// --- Making the Cube Clickable ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -49,16 +72,19 @@ window.addEventListener('click', (event) => {
     mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects([cube]); // Check if the ray hits our cube
+    const intersects = raycaster.intersectObjects([cube]);
 
     if (intersects.length > 0) {
-        // If the cube is clicked, change its color and ask the AI a question
         console.log("Cube clicked!");
-        intersects[0].object.material.color.set(0xff0000); // Turn red
+        intersects[0].object.material.color.set(0xff0000); // Turn red temporarily
+        
+        // Ask a question and then reset color after a moment
         askAI("I've arrived in your world. What can you tell me about this place?");
+        setTimeout(() => {
+             intersects[0].object.material.color.set(0x00ff00); // Turn back to green
+        }, 1000);
     }
 });
-
 
 // --- Animation Loop ---
 function animate() {
