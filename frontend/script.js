@@ -1,6 +1,8 @@
 // A minimal, working Three.js scene
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// NEW: Import the model loader
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Scene, Camera, Renderer
 const scene = new THREE.Scene();
@@ -14,20 +16,43 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// A simple cube
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+// --- REMOVED THE CUBE ---
+
+// --- NEW: Lighting ---
+// We need lights to see the new model
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+directionalLight.position.set(5, 10, 7.5);
+scene.add(directionalLight);
+
+// --- NEW: Load the 3D Model ---
+const loader = new GLTFLoader();
+loader.load('stall.glb', (gltf) => { // Make sure your model is named stall.glb
+    const model = gltf.scene;
+    scene.add(model);
+
+    // Auto-frame the model
+    const box = new THREE.Box3().setFromObject(model);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    camera.position.set(center.x, center.y, center.z + cameraZ * 1.5);
+    controls.target.copy(center);
+    
+    console.log("3D model loaded!");
+}, undefined, (error) => {
+    console.error("Error loading model:", error);
+    alert("Could not load 'stall.glb'. Make sure it is in the frontend folder.");
+});
+
 
 // Animation Loop
 function animate() {
     requestAnimationFrame(animate);
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.01;
     controls.update();
     renderer.render(scene, camera);
 }
 animate();
-
-console.log("Minimal script loaded. You should see a spinning wireframe cube.");
