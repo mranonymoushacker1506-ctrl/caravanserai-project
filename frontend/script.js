@@ -1,61 +1,101 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+// script.js - FINAL SIMPLIFIED VERSION
 
-// Scene, Camera, Renderer
+import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
+import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.155.0/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js";
+
+// --- AI Connection ---
+const HF_SPACE = "BlueWolfCaravan/caravanserai-backend";
+let hfApp = null;
+async function connectToSpace() {
+  try {
+    hfApp = await Client.connect(HF_SPACE);
+    console.log("✅ Connected to HF Space:", HF_SPACE);
+  } catch (err) {
+    console.error("❌ Failed to connect:", err);
+    hfApp = null;
+  }
+}
+connectToSpace();
+
+// --- THREE.JS Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 5;
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
 
-// --- UPDATED: Camera Controls with Zoom Limits ---
+// --- Camera Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.minDistance = 2;   // Prevent zooming in too close
-controls.maxDistance = 15;  // Prevent zooming out too far
+// Set a generous but limited zoom range
+controls.minDistance = 2;
+controls.maxDistance = 20;
 
-// Realistic Lighting with Shadows
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+// --- REMOVED MY CUSTOM LIGHTING AND SHADOWS ---
+// We will let the 3D model's own built-in lighting shine through.
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); // Add a simple, bright ambient light
 scene.add(ambientLight);
-const spotLight = new THREE.SpotLight(0xffffff, 3, 30, Math.PI * 0.15, 0.2);
-spotLight.position.set(5, 10, 7.5);
-spotLight.castShadow = true;
-spotLight.shadow.mapSize.width = 2048;
-spotLight.shadow.mapSize.height = 2048;
-scene.add(spotLight);
 
-// Load the 3D Model
+// --- Load the 3D Model ---
 const loader = new GLTFLoader();
+let stallModel;
 loader.load('stall.glb', (gltf) => {
-    const model = gltf.scene;
-    model.traverse(function (node) {
-        if (node.isMesh) {
-            node.castShadow = true;
-            node.receiveShadow = true;
-        }
-    });
-    scene.add(model);
-
-    // --- UPDATED: Auto-frame the model from further back ---
-    const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    // We pull the camera back further by using a larger multiplier (e.g., 2.5)
-    camera.position.set(center.x, center.y, center.z + cameraZ * 2.5);
-    controls.target.copy(center);
+    stallModel = gltf.scene;
+    scene.add(stallModel);
     
-    console.log("3D model loaded!");
-}, undefined, (error) => {
-    console.error("Error loading model:", error);
+    // --- NEW: Simple and Direct Camera Position ---
+    // This manually sets the camera to a position that frames the model well.
+    camera.position.set(4, 3, 6); 
+    controls.target.set(0, 1, 0); // Look at the center of the stall
+    controls.update();
+
+    console.log("3D model loaded and framed!");
 });
 
-// Animation Loop
+// --- AI Call Logic ---
+let conversationHistory = "";
+async function handleModelClick() {
+    try {
+        const userInput = window.prompt("Ask Tariq:", "Tell me a story about your travels.");
+        if (!userInput) return;
+        document.body.style.cursor = 'wait';
+        if (!hfApp) await connectToSpace();
+        if (!hfApp) throw new Error("Could not connect to AI Space.");
+        const result = await hfApp.predict("/predict", {
+            user_input: userInput,
+            history: conversationHistory,
+        });
+        document.body.style.cursor = 'default';
+        if (result?.data && Array.isArray(result.data)) {
+            const tariqResponse = result.data[0];
+            conversationHistory = result.data[1] || conversationHistory;
+            alert("Tariq says: " + tariqResponse);
+        }
+    } catch (err) {
+        document.body.style.cursor = 'default';
+        console.error("Error calling HF Space:", err);
+        alert("An error occurred while talking to the AI.");
+    }
+}
+
+// --- Making the Model Clickable ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+window.addEventListener('pointerdown', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    if (stallModel) {
+        const intersects = raycaster.intersectObjects(stallModel.children, true);
+        if (intersects.length > 0) {
+            handleModelClick();
+        }
+    }
+});
+
+// --- Animation ---
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
