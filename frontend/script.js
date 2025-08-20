@@ -1,15 +1,15 @@
-// script.js - THE FINAL, COMPLETE PROJECT
+// script.js - FINAL VERSION with Auto-Framing and Your Working AI Code
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
+// Using the correct import from your working code
+import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
 
 // --- Basic Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(2, 2, 5);
 const renderer = new THREE.WebGLRenderer({
     canvas: document.querySelector('#world'),
     antialias: true
@@ -19,10 +19,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 // --- Camera Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(0, 1, 0);
 
 // --- Lighting ---
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(5, 10, 7.5);
@@ -30,58 +29,50 @@ scene.add(directionalLight);
 
 // --- Load the 3D Model ---
 const loader = new GLTFLoader();
-let stallModel; // A variable to hold our model
+let stallModel;
 loader.load('stall.glb', (gltf) => {
     stallModel = gltf.scene;
     scene.add(stallModel);
-    console.log("3D model loaded successfully!");
+    
+    // --- NEW: Automatic Camera Framing ---
+    // This code runs after the model is loaded to perfectly frame it.
+    const box = new THREE.Box3().setFromObject(stallModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    
+    // Position the camera to fit the model
+    camera.position.set(center.x, center.y, center.z + cameraZ * 1.5);
+    controls.target.copy(center);
+    controls.update();
+
+    console.log("3D model loaded and framed!");
 });
 
-// --- State for Conversation History ---
-let conversationHistory = "";
+// --- AI Connection (Using YOUR working code) ---
+let hfApp = null;
+async function connectToSpace() {
+  try {
+    hfApp = await Client.connect("BlueWolfCaravan/caravanserai-backend");
+    console.log("✅ Connected to HF Space");
+  } catch (err) {
+    console.error("❌ Failed to connect:", err);
+    hfApp = null;
+  }
+}
+connectToSpace(); // Connect when the page loads
 
-// --- Communication with the LIVE AI Backend using the Gradio Client ---
+let conversationHistory = "";
 async function askAI(message) {
     try {
         document.body.style.cursor = 'wait';
-        const app = await client("BlueWolfCaravan/caravanserai-backend");
-        const result = await app.predict("/predict", {
-            user_input: message,
-            history: conversationHistory,
-        });
-        document.body.style.cursor = 'default';
-        const tariqResponse = result.data[0];
-        conversationHistory = result.data[1];
-        alert("Tariq says: " + tariqResponse);
-    } catch (error) {
-        document.body.style.cursor = 'default';
-        console.error("Error communicating with AI:", error);
-        alert("Could not connect to the AI's mind.");
-    }
-}
-
-// --- Making the Model Clickable ---
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-window.addEventListener('click', (event) => {
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
-    // Check if the ray intersects with any part of the loaded model
-    if (stallModel) {
-        const intersects = raycaster.intersectObjects(stallModel.children, true);
-        if (intersects.length > 0) {
-            console.log("Model clicked!");
-            askAI("Greetings, merchant. Tell me a story about this place.");
-        }
-    }
-});
-
-// --- Animation Loop ---
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    renderer.render(scene, camera);
-}
-animate();
+        if (!hfApp) {
+            console.log("Not connected, attempting to reconnect...");
+            await connectToSpace();
+            if (!hfApp) { // If still not connected, show error
+                alert("Could not connect to the AI's mind.");
+                document.body.style.cursor = 'default';
+                return;
