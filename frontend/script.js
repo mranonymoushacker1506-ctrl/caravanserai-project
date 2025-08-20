@@ -1,4 +1,4 @@
-// script.js - FINAL, CORRECTED LIVE VERSION
+// script.js - FINAL, DEFINITIVELY CORRECTED LIVE VERSION
 
 import * as THREE from 'three';
 
@@ -24,7 +24,7 @@ let conversationHistory = "";
 // --- Communication with the LIVE AI Backend ---
 async function askAI(message) {
     try {
-        // This is the correct URL for your app's API endpoint
+        // THIS IS THE DEFINITIVE, CORRECT URL FOR YOUR API
         const API_URL = "https://bluewolfcaravan-caravanserai-backend.hf.space/run/predict";
 
         document.body.style.cursor = 'wait';
@@ -32,7 +32,6 @@ async function askAI(message) {
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            // Gradio API expects data in a specific "data" array
             body: JSON.stringify({
                 data: [
                     message,
@@ -42,7 +41,6 @@ async function askAI(message) {
         });
         
         if (!response.ok) {
-            // Throw an error if the server response is not successful
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -50,7 +48,6 @@ async function askAI(message) {
         
         document.body.style.cursor = 'default';
         
-        // Gradio returns the results in a "data" array
         const tariqResponse = data.data[0]; 
         conversationHistory = data.data[1]; 
 
