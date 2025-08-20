@@ -1,6 +1,8 @@
 // script.js - THE FINAL, WORKING LIVE VERSION
 
-import * as THREE from 'three';
+// Import the necessary libraries directly from their CDN URLs
+import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
+import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
 
 // --- Basic Setup ---
 const scene = new THREE.Scene();
@@ -21,35 +23,25 @@ scene.add(cube);
 // --- State for Conversation History ---
 let conversationHistory = "";
 
-// --- Communication with the LIVE AI Backend using FETCH ---
+// --- Communication with the LIVE AI Backend using the Gradio Client ---
 async function askAI(message) {
     try {
-        // This is the direct, raw HTTP endpoint for your Gradio app
-        const API_URL = "https://bluewolfcaravan-caravanserai-backend.hf.space/run/predict";
-
         document.body.style.cursor = 'wait';
 
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                data: [
-                    message,
-                    conversationHistory
-                ]
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+        // 1. Connect to your Hugging Face Space using its name
+        const app = await client("BlueWolfCaravan/caravanserai-backend");
 
-        const data = await response.json();
-        
+        // 2. Call the '/predict' endpoint with the correct data structure
+        const result = await app.predict("/predict", {
+            user_input: message,
+            history: conversationHistory,
+        });
+
         document.body.style.cursor = 'default';
-        
-        const tariqResponse = data.data[0]; 
-        conversationHistory = data.data[1]; 
+
+        // The result data contains the response and updated history
+        const tariqResponse = result.data[0];
+        conversationHistory = result.data[1];
 
         console.log("AI Response:", tariqResponse);
         alert("Tariq says: " + tariqResponse);
@@ -57,7 +49,7 @@ async function askAI(message) {
     } catch (error) {
         document.body.style.cursor = 'default';
         console.error("Error communicating with AI:", error);
-        alert("Could not connect to the AI's mind. Please check the URL and backend status.");
+        alert("Could not connect to the AI's mind. Please check the backend status.");
     }
 }
 
@@ -68,17 +60,14 @@ const mouse = new THREE.Vector2();
 window.addEventListener('click', (event) => {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects([cube]);
-
     if (intersects.length > 0) {
         console.log("Cube clicked!");
         intersects[0].object.material.color.set(0xff0000);
-        
         askAI("I've arrived in your world. What can you tell me about this place?");
         setTimeout(() => {
-             intersects[0].object.material.color.set(0x00ff00);
+            intersects[0].object.material.color.set(0x00ff00);
         }, 1000);
     }
 });
