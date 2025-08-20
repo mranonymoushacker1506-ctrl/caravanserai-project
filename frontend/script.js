@@ -1,62 +1,87 @@
-// script.js - FINAL VERSION WITH 3D MODEL
+// script.js - THE FINAL, COMPLETE PROJECT
 
 import * as THREE from 'three';
-// NEW: Import the GLTF Loader and Orbit Controls
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
 
 // --- Basic Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(2, 2, 5); // Move the camera back and up to see the model
+camera.position.set(2, 2, 5);
 const renderer = new THREE.WebGLRenderer({
     canvas: document.querySelector('#world'),
-    antialias: true // Makes the model look smoother
+    antialias: true
 });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-// --- NEW: Camera Controls ---
-// This allows you to use your mouse to pan, zoom, and rotate the camera
+// --- Camera Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Makes the movement feel smoother
-controls.target.set(0, 1, 0); // Aim the camera at a point slightly above the ground
+controls.enableDamping = true;
+controls.target.set(0, 1, 0);
 
-// --- NEW: Lighting ---
-// We need lights to see the details of the model
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft, general light
+// --- Lighting ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // A stronger, sun-like light
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
 directionalLight.position.set(5, 10, 7.5);
 scene.add(directionalLight);
 
-// --- NEW: Load the 3D Model ---
+// --- Load the 3D Model ---
 const loader = new GLTFLoader();
-loader.load(
-    // The name of your model file
-    'stall.glb',
-    // This function runs when the model has successfully loaded
-    function (gltf) {
-        const model = gltf.scene;
-        scene.add(model);
-        console.log("3D model loaded successfully!");
-    },
-    // This function runs while the model is loading (optional)
-    undefined,
-    // This function runs if there is an error loading the model
-    function (error) {
-        console.error("An error happened while loading the model:", error);
-        alert("Could not load the 3D model. Make sure the file is named 'stall.glb' and is in the 'frontend' folder.");
+let stallModel; // A variable to hold our model
+loader.load('stall.glb', (gltf) => {
+    stallModel = gltf.scene;
+    scene.add(stallModel);
+    console.log("3D model loaded successfully!");
+});
+
+// --- State for Conversation History ---
+let conversationHistory = "";
+
+// --- Communication with the LIVE AI Backend using the Gradio Client ---
+async function askAI(message) {
+    try {
+        document.body.style.cursor = 'wait';
+        const app = await client("BlueWolfCaravan/caravanserai-backend");
+        const result = await app.predict("/predict", {
+            user_input: message,
+            history: conversationHistory,
+        });
+        document.body.style.cursor = 'default';
+        const tariqResponse = result.data[0];
+        conversationHistory = result.data[1];
+        alert("Tariq says: " + tariqResponse);
+    } catch (error) {
+        document.body.style.cursor = 'default';
+        console.error("Error communicating with AI:", error);
+        alert("Could not connect to the AI's mind.");
     }
-);
+}
+
+// --- Making the Model Clickable ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+window.addEventListener('click', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    // Check if the ray intersects with any part of the loaded model
+    if (stallModel) {
+        const intersects = raycaster.intersectObjects(stallModel.children, true);
+        if (intersects.length > 0) {
+            console.log("Model clicked!");
+            askAI("Greetings, merchant. Tell me a story about this place.");
+        }
+    }
+});
 
 // --- Animation Loop ---
 function animate() {
     requestAnimationFrame(animate);
-    controls.update(); // Update camera controls every frame
+    controls.update();
     renderer.render(scene, camera);
 }
 animate();
-
-// --- NOTE: The AI connection code has been removed for this step ---
-// We will add it back once the world is built.
