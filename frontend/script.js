@@ -25,7 +25,7 @@ let conversationHistory = "";
 async function askAI(message) {
     try {
         // CORRECTED API URL based on the "Use via API" page
-        const API_URL = "https://bluewolfcaravan-caravanserai-backend.hf.space/run/predict";
+        const API_URL = "https://bluewolfcaravan-caravanserai-backend.hf.space/predict";
 
         document.body.style.cursor = 'wait';
 
