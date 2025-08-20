@@ -1,13 +1,13 @@
-// script.js - FINAL SIMPLIFIED VERSION
-
+// FINAL WORKING VERSION
 import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
-import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
+import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.2.1/dist/index.min.js";
 import { GLTFLoader } from "https://unpkg.com/three@0.155.0/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js";
 
 // --- AI Connection ---
 const HF_SPACE = "BlueWolfCaravan/caravanserai-backend";
 let hfApp = null;
+
 async function connectToSpace() {
   try {
     hfApp = await Client.connect(HF_SPACE);
@@ -17,7 +17,7 @@ async function connectToSpace() {
     hfApp = null;
   }
 }
-connectToSpace();
+connectToSpace(); // Connect when the page loads
 
 // --- THREE.JS Setup ---
 const scene = new THREE.Scene();
@@ -25,30 +25,47 @@ scene.background = new THREE.Color(0x1a1a1a);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
 
 // --- Camera Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-// Set a generous but limited zoom range
 controls.minDistance = 2;
 controls.maxDistance = 20;
 
-// --- REMOVED MY CUSTOM LIGHTING AND SHADOWS ---
-// We will let the 3D model's own built-in lighting shine through.
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5); // Add a simple, bright ambient light
+// --- Lighting ---
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+directionalLight.position.set(5, 10, 7.5);
+directionalLight.castShadow = true;
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
+scene.add(directionalLight);
 
 // --- Load the 3D Model ---
 const loader = new GLTFLoader();
 let stallModel;
 loader.load('stall.glb', (gltf) => {
     stallModel = gltf.scene;
+    stallModel.traverse(function (node) {
+        if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
     scene.add(stallModel);
     
-    // --- NEW: Simple and Direct Camera Position ---
-    // This manually sets the camera to a position that frames the model well.
-    camera.position.set(4, 3, 6); 
-    controls.target.set(0, 1, 0); // Look at the center of the stall
+    // Automatic Camera Framing
+    const box = new THREE.Box3().setFromObject(stallModel);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    
+    camera.position.set(center.x, center.y + size.y * 0.2, center.z + cameraZ * 1.5);
+    controls.target.copy(center);
     controls.update();
 
     console.log("3D model loaded and framed!");
