@@ -1,111 +1,62 @@
-// script.js - Caravanserai frontend
+// script.js - FINAL VERSION WITH 3D MODEL
 
-import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
-import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+import * as THREE from 'three';
+// NEW: Import the GLTF Loader and Orbit Controls
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// 👉 CHANGE THIS to your real Hugging Face Space ID
-const HF_SPACE = "BlueWolfCaravan/caravanserai-backend";
-
-// If the Space is private, add your token here (⚠ not recommended for production):
-// const HF_OPTIONS = { hf_token: "hf_XXXXXXXXXXXXXXXX" };
-const HF_OPTIONS = {};
-
-let hfApp = null;
-async function connectToSpace() {
-  try {
-    hfApp = await Client.connect(HF_SPACE, HF_OPTIONS);
-    console.log("✅ Connected to HF Space:", HF_SPACE);
-  } catch (err) {
-    console.error("❌ Failed to connect:", err);
-    hfApp = null;
-  }
-}
-connectToSpace();
-
-// --- THREE.JS setup ---
+// --- Basic Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
-
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 4;
-
-const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
+camera.position.set(2, 2, 5); // Move the camera back and up to see the model
+const renderer = new THREE.WebGLRenderer({
+    canvas: document.querySelector('#world'),
+    antialias: true // Makes the model look smoother
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-});
 
-// Cube
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshStandardMaterial({ color: 0x0077ff });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+// --- NEW: Camera Controls ---
+// This allows you to use your mouse to pan, zoom, and rotate the camera
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; // Makes the movement feel smoother
+controls.target.set(0, 1, 0); // Aim the camera at a point slightly above the ground
 
-// Light
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 5, 5);
-scene.add(light);
+// --- NEW: Lighting ---
+// We need lights to see the details of the model
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft, general light
+scene.add(ambientLight);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // A stronger, sun-like light
+directionalLight.position.set(5, 10, 7.5);
+scene.add(directionalLight);
 
-// Raycaster
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-window.addEventListener('pointerdown', (event) => {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects([cube]);
-  if (intersects.length > 0) {
-    handleCubeClick(intersects);
-  }
-});
-
-// --- AI Call ---
-let conversationHistory = "";
-
-async function handleCubeClick(intersects) {
-  try {
-    const userInput = window.prompt("Ask Tariq:", "Hello, traveler!");
-    if (!userInput) return;
-
-    intersects[0].object.material.color.set(0xffff00);
-
-    if (!hfApp) {
-      await connectToSpace();
-      if (!hfApp) return;
+// --- NEW: Load the 3D Model ---
+const loader = new GLTFLoader();
+loader.load(
+    // The name of your model file
+    'stall.glb',
+    // This function runs when the model has successfully loaded
+    function (gltf) {
+        const model = gltf.scene;
+        scene.add(model);
+        console.log("3D model loaded successfully!");
+    },
+    // This function runs while the model is loading (optional)
+    undefined,
+    // This function runs if there is an error loading the model
+    function (error) {
+        console.error("An error happened while loading the model:", error);
+        alert("Could not load the 3D model. Make sure the file is named 'stall.glb' and is in the 'frontend' folder.");
     }
+);
 
-    const payload = [userInput, conversationHistory];
-    const result = await hfApp.predict("/predict", payload);
-
-    console.log("Raw HF result:", result);
-
-    if (result?.data && Array.isArray(result.data)) {
-      const tariqResponse = result.data[0];
-      conversationHistory = result.data[1] || conversationHistory;
-      console.log("🗣 Tariq:", tariqResponse);
-      alert("Tariq says: " + tariqResponse);
-    }
-
-    setTimeout(() => {
-      intersects[0].object.material.color.set(0x00ff00);
-      setTimeout(() => intersects[0].object.material.color.set(0x0077ff), 700);
-    }, 250);
-
-  } catch (err) {
-    console.error("Error calling HF Space:", err);
-    intersects[0].object.material.color.set(0xff0000);
-    setTimeout(() => intersects[0].object.material.color.set(0x0077ff), 800);
-  }
-}
-
-// --- Animation ---
+// --- Animation Loop ---
 function animate() {
-  requestAnimationFrame(animate);
-  cube.rotation.x += 0.008;
-  cube.rotation.y += 0.01;
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    controls.update(); // Update camera controls every frame
+    renderer.render(scene, camera);
 }
 animate();
+
+// --- NOTE: The AI connection code has been removed for this step ---
+// We will add it back once the world is built.
