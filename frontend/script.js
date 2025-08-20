@@ -1,7 +1,5 @@
-// A minimal, working Three.js scene
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// NEW: Import the model loader
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 // Scene, Camera, Renderer
@@ -9,27 +7,47 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.z = 5;
+
+// --- NEW: Enable Shadows in the Renderer ---
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; // Enable shadow mapping
 
 // Controls
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
-// --- REMOVED THE CUBE ---
+// --- REMOVED OLD LIGHTS ---
 
-// --- NEW: Lighting ---
-// We need lights to see the new model
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+// --- NEW: Realistic Lighting with Shadows ---
+// A soft ambient light to fill the scene
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-directionalLight.position.set(5, 10, 7.5);
-scene.add(directionalLight);
 
-// --- NEW: Load the 3D Model ---
+// A powerful spotlight to create strong shadows and highlights
+const spotLight = new THREE.SpotLight(0xffffff, 3, 30, Math.PI * 0.15, 0.2);
+spotLight.position.set(5, 10, 7.5);
+spotLight.castShadow = true; // This light will cast shadows
+// Configure shadow quality
+spotLight.shadow.mapSize.width = 2048;
+spotLight.shadow.mapSize.height = 2048;
+scene.add(spotLight);
+
+
+// --- Load the 3D Model ---
 const loader = new GLTFLoader();
-loader.load('stall.glb', (gltf) => { // Make sure your model is named stall.glb
+loader.load('stall.glb', (gltf) => {
     const model = gltf.scene;
+    
+    // --- NEW: Enable Shadows for the Model ---
+    // Go through every part of the model and tell it to cast and receive shadows
+    model.traverse(function (node) {
+        if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
+
     scene.add(model);
 
     // Auto-frame the model
@@ -45,7 +63,6 @@ loader.load('stall.glb', (gltf) => { // Make sure your model is named stall.glb
     console.log("3D model loaded!");
 }, undefined, (error) => {
     console.error("Error loading model:", error);
-    alert("Could not load 'stall.glb'. Make sure it is in the frontend folder.");
 });
 
 
