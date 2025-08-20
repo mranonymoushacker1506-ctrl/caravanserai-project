@@ -1,4 +1,4 @@
-// script.js - FINAL VERSION with Camera Fix
+// script.js - FINAL STABILIZED VERSION
 
 import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
 import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
@@ -23,17 +23,16 @@ connectToSpace();
 // --- THREE.JS Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
-
-// --- UPDATED CAMERA ---
-// We've increased the 'far' value from 1000 to 5000 to prevent clipping on large models.
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 5000);
-
+// Set a default camera position in case auto-framing fails
+camera.position.set(2, 2, 5); 
 const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 // --- Camera Controls ---
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
+controls.target.set(0, 1, 0); // Set a default target
 
 // --- Lighting ---
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -49,22 +48,37 @@ loader.load('stall.glb', (gltf) => {
     stallModel = gltf.scene;
     scene.add(stallModel);
     
-    // Automatic Camera Framing
-    const box = new THREE.Box3().setFromObject(stallModel);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    const fov = camera.fov * (Math.PI / 180);
-    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
-    
-    // --- UPDATED CAMERA POSITION ---
-    // We multiply by 1.75 instead of 1.5 to pull the camera back a little further,
-    // ensuring the whole model is comfortably in the frame.
-    camera.position.set(center.x, center.y, center.z + cameraZ * 1.75);
-    controls.target.copy(center);
-    controls.update();
+    // --- NEW: Robust Automatic Camera Framing with Safety Checks ---
+    try {
+        const box = new THREE.Box3().setFromObject(stallModel);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
 
-    console.log("3D model loaded and framed!");
+        // Safety check to ensure the model has a valid size
+        if (size.x === 0 && size.y === 0 && size.z === 0) {
+            console.warn("Model has no size, using default camera position.");
+            controls.update();
+            return;
+        }
+
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+
+        // Safety check for calculated values
+        if (isFinite(cameraZ)) {
+            camera.position.set(center.x, center.y, center.z + cameraZ * 1.75);
+            controls.target.copy(center);
+        } else {
+             console.warn("Could not calculate camera position, using default.");
+        }
+
+    } catch(e) {
+        console.error("Error during camera auto-framing:", e);
+    }
+
+    controls.update();
+    console.log("3D model loaded!");
 });
 
 // --- AI Call Logic ---
