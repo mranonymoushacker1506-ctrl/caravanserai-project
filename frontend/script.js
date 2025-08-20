@@ -1,19 +1,30 @@
-// script.js - FINAL VERSION with Auto-Framing and Your Working AI Code
+// script.js - FINAL MERGED VERSION
 
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-// Using the correct import from your working code
-import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
+import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
+import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
+import { GLTFLoader } from "https://unpkg.com/three@0.155.0/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "https://unpkg.com/three@0.155.0/examples/jsm/controls/OrbitControls.js";
 
-// --- Basic Setup ---
+// --- AI Connection (Your working code) ---
+const HF_SPACE = "BlueWolfCaravan/caravanserai-backend";
+let hfApp = null;
+
+async function connectToSpace() {
+  try {
+    hfApp = await Client.connect(HF_SPACE);
+    console.log("✅ Connected to HF Space:", HF_SPACE);
+  } catch (err) {
+    console.error("❌ Failed to connect:", err);
+    hfApp = null;
+  }
+}
+connectToSpace(); // Connect when the page loads
+
+// --- THREE.JS Setup ---
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x1a1a1a);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({
-    canvas: document.querySelector('#world'),
-    antialias: true
-});
+const renderer = new THREE.WebGLRenderer({ canvas: document.querySelector('#world'), antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 // --- Camera Controls ---
@@ -29,22 +40,19 @@ scene.add(directionalLight);
 
 // --- Load the 3D Model ---
 const loader = new GLTFLoader();
-let stallModel;
+let stallModel; // This will hold our loaded model
 loader.load('stall.glb', (gltf) => {
     stallModel = gltf.scene;
     scene.add(stallModel);
     
-    // --- NEW: Automatic Camera Framing ---
-    // This code runs after the model is loaded to perfectly frame it.
+    // Automatic Camera Framing
     const box = new THREE.Box3().setFromObject(stallModel);
     const center = box.getCenter(new THREE.Vector3());
     const size = box.getSize(new THREE.Vector3());
-    
     const maxDim = Math.max(size.x, size.y, size.z);
     const fov = camera.fov * (Math.PI / 180);
     let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
     
-    // Position the camera to fit the model
     camera.position.set(center.x, center.y, center.z + cameraZ * 1.5);
     controls.target.copy(center);
     controls.update();
@@ -52,27 +60,56 @@ loader.load('stall.glb', (gltf) => {
     console.log("3D model loaded and framed!");
 });
 
-// --- AI Connection (Using YOUR working code) ---
-let hfApp = null;
-async function connectToSpace() {
-  try {
-    hfApp = await Client.connect("BlueWolfCaravan/caravanserai-backend");
-    console.log("✅ Connected to HF Space");
-  } catch (err) {
-    console.error("❌ Failed to connect:", err);
-    hfApp = null;
-  }
-}
-connectToSpace(); // Connect when the page loads
-
+// --- AI Call Logic (Your working code) ---
 let conversationHistory = "";
-async function askAI(message) {
+async function handleModelClick() {
     try {
+        const userInput = window.prompt("Ask Tariq:", "Tell me a story about your travels.");
+        if (!userInput) return;
+
         document.body.style.cursor = 'wait';
-        if (!hfApp) {
-            console.log("Not connected, attempting to reconnect...");
-            await connectToSpace();
-            if (!hfApp) { // If still not connected, show error
-                alert("Could not connect to the AI's mind.");
-                document.body.style.cursor = 'default';
-                return;
+
+        if (!hfApp) await connectToSpace();
+        if (!hfApp) throw new Error("Could not connect to AI Space.");
+        
+        const result = await hfApp.predict("/predict", {
+            user_input: userInput,
+            history: conversationHistory,
+        });
+
+        document.body.style.cursor = 'default';
+
+        if (result?.data && Array.isArray(result.data)) {
+            const tariqResponse = result.data[0];
+            conversationHistory = result.data[1] || conversationHistory;
+            alert("Tariq says: " + tariqResponse);
+        }
+    } catch (err) {
+        document.body.style.cursor = 'default';
+        console.error("Error calling HF Space:", err);
+        alert("An error occurred while talking to the AI.");
+    }
+}
+
+// --- Making the Model Clickable ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+window.addEventListener('pointerdown', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    if (stallModel) {
+        const intersects = raycaster.intersectObjects(stallModel.children, true);
+        if (intersects.length > 0) {
+            handleModelClick();
+        }
+    }
+});
+
+// --- Animation ---
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
