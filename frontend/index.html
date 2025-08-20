@@ -12,12 +12,14 @@
 <body>
     <canvas id="world"></canvas>
     
-    <script type="module">
-        import "https://cdn.jsdelivr.net/npm/@gradio/client@0.1.4/dist/index.min.js";
-        import * as THREE from "https://unpkg.com/three@0.155.0/build/three.module.js";
-        window.THREE = THREE; // Make THREE globally available for our script
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.155.0/build/three.module.js"
+            }
+        }
     </script>
-    
+
     <script type="module" src="script.js"></script>
 </body>
 </html>
